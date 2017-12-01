@@ -1,0 +1,88 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body{
+                font-family: "Ubuntu Mono", monospace;
+                line-height: 200%;
+                font-size: 24pt;
+            }
+            button{
+                font-size: 24pt;
+                margin-right: 2em;
+            }
+            input{
+                font-size: 24pt;
+                margin-right: 1em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Infoscreen Youtube Control</h1>
+        <button id="btnStop" onclick="makeStopRequest();">stop</button><span class="spacer"></span><button id="btnPause" onclick="makePauseRequest();">pause</button><br/><br/>
+        <input type="text" id="v"><button id="btnGo" onclick="makeVRequest();">go</button>
+        <br/><br/>
+        <h2>Status</h2>
+        Video id: <span id="spvideoid"></span><br/><br/>
+        Active: <span id="spactive"></span><br/><br/>
+        Paused: <span id="sppaused"></span><br/><br/>
+        <script>
+        var pause = false;
+
+        function updatePage(youtube){
+            document.getElementById('spvideoid').innerText = youtube.v;
+            document.getElementById('spactive').innerText = youtube.active;
+            document.getElementById('sppaused').innerText = youtube.pause;
+        }
+
+        function makeStopRequest(){
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function () {
+                var DONE = this.DONE || 4;
+                if (this.readyState === DONE){
+                    var ytstate = JSON.parse(request.responseText);
+                    updatePage(ytstate);
+                }
+            };
+            request.open('GET', 'youtube?active=false&pause=false', true);
+            request.send();
+        }
+
+        function makePauseRequest(){
+            var pstr = "false";
+            if(!this.pause){
+                pstr = "true";
+                this.pause = true;
+            }else{
+                pstr = "false";
+                this.pause = false;
+            }
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function () {
+                var DONE = this.DONE || 4;
+                if (this.readyState === DONE){
+                    var ytstate = JSON.parse(request.responseText);
+                    updatePage(ytstate);
+                }
+            };
+            request.open('GET', 'youtube?pause=' + pstr, true);
+            request.send();
+        }
+
+        function makeVRequest(){
+            var v = (document.getElementById('v').value + "").trim();
+            var request = new XMLHttpRequest();
+            request.onreadystatechange = function () {
+                var DONE = this.DONE || 4;
+                if (this.readyState === DONE){
+                    var ytstate = JSON.parse(request.responseText);
+                    updatePage(ytstate);
+                }
+            };
+            request.open('GET', 'youtube?active=true&pause=false&v=' + encodeURIComponent(v) , true);
+            request.send();
+        }
+
+        </script>
+    </body>
+</html>
