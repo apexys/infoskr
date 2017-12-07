@@ -1,3 +1,4 @@
+const setTimeout = require('timers').setTimeout;
 const http = require('http');
 const url = require('url');
 const fs = require('fs');
@@ -42,16 +43,32 @@ routes['/'] = sendfile('infoscreen.html');
 
 routes['/youtube'] = sendfile('youtubectrl.html');
 
+let replayEvents = () => {
+    setTimeout(() => {
+        eventproxy.emit('event', {name: 'temperature', message: global_temperature});  
+        eventproxy.emit('event', {name: 'pump', message: pump_status});   
+        getKVGdata();     
+    }, 500);
+}
+
 routes['/eventstream'] = (req,res) => {
     res.writeHead(200, {'Content-Type': 'text/event-stream', 'Access-Control-Allow-Origin': '*'});
-    eventproxy.eventNames().forEach(eventname => {
-        console.log(eventname);
-        eventproxy.on('event', ({name, message}) => {
-            res.write(`event: ${name}\n`);
-            res.write(`data: ${message}\n\n`);
-        });
+    let l =  ({name, message}) => {
+        res.write(`event: ${name}\n`);
+        message.split('\n').forEach(line => res.write(`data: ${line}\n`));
+        res.write('\n');
+    };
+    eventproxy.on('event',l);
+    req.socket.on('close', () => { //Remove eventListener on client disconnection
+        eventproxy.removeListener('event',l); 
     });
+    replayEvents();
+}
 
+let ytcache = {
+    v: "",
+    active: "",
+    pause: ""
 }
 
 routes['/youtubeupdate'] = (req,res) => {
@@ -62,16 +79,25 @@ routes['/youtubeupdate'] = (req,res) => {
         if(urlparts.query.v){
             var vparts = url.parse(urlparts.query.v, true);
             eventproxy.emit('event', {name: 'youtube-v', message: vparts.query.v});
+            ytcache.v = vparts.query.v;
         }
         if(urlparts.query.active){
             eventproxy.emit('event', {name: 'youtube-active', message: urlparts.query.active});
+            ytcache.active = urlparts.query.active;
         }
         if(urlparts.query.pause){
             eventproxy.emit('event', {name: 'youtube-pause', message: urlparts.query.pause});
+            ytcache.pause = urlparts.query.pause;
         }
     }
     res.writeHead('200', {'Content-Type': 'text/plain'});
     res.write('OK');
+    res.end();
+}
+
+routes['/ytcache'] = (req,res) => {
+    res.writeHead('200', {'Content-Type': 'application/json'});
+    res.write(JSON.stringify(ytcache));
     res.end();
 }
 
@@ -97,7 +123,7 @@ setTimeout(()=>{
 }, 500);
 
 
-setTimeout(()=>{
+let getKVGdata = () => {
     http.get(url.parse('http://kvg-kiel.de/internetservice/services/passageInfo/stopPassages/stop?stop=400&mode=departure'), function(response) {
         var body = '';
         response.on('data', function(d) {
@@ -105,6 +131,9 @@ setTimeout(()=>{
         });
         response.on('end', function() {
             eventproxy.emit('event', {name: 'kvg', message: body});
+            console.log(body);
         });
     });
-}, 60000);
+};
+
+setTimeout(getKVGdata, 30000);

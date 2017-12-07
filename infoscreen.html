@@ -42,6 +42,10 @@
             font-size: 28pt;
         }
 
+        .globalTable{
+            font-size: 38pt;
+        }
+
         tr{
             background-color: #fefefe;
         }
@@ -84,37 +88,6 @@
         }, 500);
     </script>
     <div id="temperature">CPU-Temperatur: <span id="cputemp">NaN</span>°C</div>
-    <script>
-        function makeTempRequest(){
-            var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    document.getElementById('cputemp').innerText = request.responseText;
-                }
-            };
-            request.open('GET', 'http://localhost:8123/temperature', true);
-            request.send();
-        }
-        function makePumpRequest(){
-            var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    if(/ON/.test(request.responseText)){
-                        document.getElementById('cputemp').classList.add('on');
-                    }else{
-                        document.getElementById('cputemp').classList.remove('on');
-
-                    }
-                }
-            };
-            request.open('GET', 'http://localhost:8123/pump', true);
-            request.send();
-        }
-        setInterval(makeTempRequest, 2000);
-        setInterval(makePumpRequest, 5000);
-    </script>
     <h1>Abfahrten Südfriedhof:</h1>
     <div id="bus">
 
@@ -123,6 +96,18 @@
 
     </div>
     <script>
+        var evtSource = new EventSource('eventstream');
+        //evtSource.addEventListener('open', ()=>{console.log("sse opened")});
+        //evtSource.addEventListener('error', (e)=>{console.log(e)});
+        evtSource.addEventListener('temperature', e => document.getElementById('cputemp').innerText = e.data);
+        evtSource.addEventListener('pump', e => {
+            if(/ON/.test(e.data)){
+                document.getElementById('cputemp').classList.add('on');
+            }else{
+                document.getElementById('cputemp').classList.remove('on');
+            }
+        });
+
         function cdiv(parent, classes){
             let div = document.createElement('div');
             if(classes){
@@ -148,8 +133,11 @@
         }
 
         function parseKVGData(kvgdata){
+            console.log(kvgdata);
             let lines = {};
             let lineNames = [];
+            let trips = {};
+            let tripIds = [];
             kvgdata.actual.forEach(a => {
                 let line = a.patternText;
                 if(!lines[line]){
@@ -157,15 +145,43 @@
                     lineNames.push(line);
                 }
                 let lobj = {};
+                lobj.line = line;
+                lobj.tripId = a.tripId;
                 lobj.direction = a.direction;
                 lobj.arrival = a.actualTime;
                 lobj.relativeMinutes = parseInt(a.actualRelativeTime / 60);
                 lobj.delay = strTimeToMinuteInt(a.actualTime) - strTimeToMinuteInt(a.plannedTime);
+                tripIds.push(a.tripId);
+                trips[a.tripId] = lobj;
                 lines[line].push(lobj);
             });
 
             document.getElementById('bus').innerHTML = "";
 
+            tripIds.sort((a,b) => trips[a].relativeMinutes - trips[b].relativeMinutes).forEach( tripId => {
+                let route = trips[tripId];
+                let bus = document.getElementById('bus');
+                let table = document.createElement('table');
+                table.classList.add('globalTable');
+                table.setAttribute('cellspacing','0');
+                bus.appendChild(table);
+                let row = document.createElement('tr');
+                ctd(row, ['linename'],route.line)
+                ctd(row,['direction'],route.direction);
+                let time = ctd(row,['time'],route.relativeMinutes);
+                time.style.textAlign = "right";
+                let delaytext = "    ";
+                if(route.delay){
+                    delaytext = "(+" + route.delay + ")";
+                }
+                let delay = ctd(row,['delay'],delaytext);
+                delay.style.textAlign = "right";
+                delay.style.width = "10em";
+                table.appendChild(row);
+            });
+
+            //Old:
+            /*
             lineNames.forEach(ln => {
                 let lineContainer = cdiv(document.getElementById('bus'), ['linecontainer']);
                 let table = document.createElement('table');
@@ -184,96 +200,59 @@
                     table.appendChild(row);
                 });
             });
+            */
 
-            console.log(lines);
+            //console.log(lines);
         }
 
-        function makeKVGRequest(){
-            var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    var busState = JSON.parse(request.responseText);
-                    parseKVGData(busState);
-                }
-            };
-            request.open('GET', 'http://localhost:8123/update', true);
-            request.send();
-        }
-        setInterval(makeKVGRequest,60 * 1000);
-        makeKVGRequest();
+        evtSource.addEventListener('kvg', e =>{ 
+            parseKVGData(JSON.parse(e.data))
+        });
 
-        var pageYT = {
-            v: "",
-            pause: false,
-            active: false
-        };
+        var playerActive = false;
+        var playerPaused = false;
 
         var player;
 
-        function handleYTRequest(youtube){
-            console.log(youtube, pageYT);
-            if((youtube.active == true) && (pageYT.active == false)){//new video
-                console.log("new video: " + youtube.v);
-                pageYT.v = youtube.v;
-                pageYT.active = true;
-                pageYT.pause = false;
+        evtSource.addEventListener('youtube-v', e => {
+            if(!playerActive && e.data != "undefined"){
+                playerActive = true;
                 player = new YT.Player('ytplayer', {
                     height: '360',
                     width: '640',
-                    videoId: youtube.v,
+                    videoId: e.data,
                     playerVars: {
                         autoplay: 1
                     }
                 });
             }
-            if(youtube.active == false && pageYT.active == true){//stop video
-                console.log("stop");
-                pageYT.v = "";
-                pageYT.active = false;
-                pageYT.pause = false;
+        });
+
+        evtSource.addEventListener('youtube-active', e => {
+            if(e.data == "false" && playerActive){
+                playerActive = false;
+                playerPaused = false;
                 player.destroy();
             }
-            if(youtube.active && (youtube.pause == true && pageYT.pause == false)){//pause video
-                console.log("pause");
-                console.log(player);
-                pageYT.pause = true;
+        });
+
+        evtSource.addEventListener('youtube-pause', e => {
+            var pause = JSON.parse(e.data);
+            if(!playerPaused && pause){ //Pause player
+                playerPaused = true;
                 player.pauseVideo();
-            }
-            if(youtube.active && (youtube.pause == false && pageYT.pause == true)){//unpause video
-                console.log("unpause");
-                pageYT.pause = false;
+            }else if(playerPaused && pause){ //Unpause player
+                playerPaused = false;
                 player.playVideo();
             }
-        }
-
-        function makeYTRequest(){
-            var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    var ytstate = JSON.parse(request.responseText);
-                    handleYTRequest(ytstate);
-                }
-            };
-            request.open('GET', 'http://localhost:8123/youtube?update=true', true);
-            request.send();
-        }
+        });
 
         function makeClearingYTRequest(){
             var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    var ytstate = JSON.parse(request.responseText);
-                    handleYTRequest(ytstate);
-                }
-            };
-            request.open('GET', 'http://localhost:8123/youtube?active=false&pause=false&v=_', true);
+            request.open('GET', 'http://localhost:8123/youtubeupdate?active=false&pause=false&v=_', true);
             request.send();
         }
         makeClearingYTRequest();
-        setInterval(makeYTRequest,1000);
     </script>
 </body>
 </html>

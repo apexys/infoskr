@@ -27,24 +27,23 @@
         Active: <span id="spactive"></span><br/><br/>
         Paused: <span id="sppaused"></span><br/><br/>
         <script>
+        var evtSource = new EventSource('eventstream');
+        evtSource.addEventListener('youtube-v', e => document.getElementById('spvideoid').innerText = e.data);
+        evtSource.addEventListener('youtube-active', e => document.getElementById('spactive').innerText = e.data);
+        evtSource.addEventListener('youtube-pause', e => document.getElementById('sppaused').innerText = e.data);
+
+        fetch('/ytcache').then(r => r.json()).then(ytcache => {
+            document.getElementById('spvideoid').innerText = ytcache.v;
+            document.getElementById('spactive').innerText = ytcache.active;
+            document.getElementById('sppaused').innerText = ytcache.pause;
+        });
+
         var pause = false;
 
-        function updatePage(youtube){
-            document.getElementById('spvideoid').innerText = youtube.v;
-            document.getElementById('spactive').innerText = youtube.active;
-            document.getElementById('sppaused').innerText = youtube.pause;
-        }
 
         function makeStopRequest(){
             var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    var ytstate = JSON.parse(request.responseText);
-                    updatePage(ytstate);
-                }
-            };
-            request.open('GET', 'youtube?active=false&pause=false', true);
+            request.open('GET', 'youtubeupdate?active=false&pause=false', true);
             request.send();
         }
 
@@ -58,28 +57,14 @@
                 this.pause = false;
             }
             var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    var ytstate = JSON.parse(request.responseText);
-                    updatePage(ytstate);
-                }
-            };
-            request.open('GET', 'youtube?pause=' + pstr, true);
+            request.open('GET', 'youtubeupdate?pause=' + pstr, true);
             request.send();
         }
 
         function makeVRequest(){
             var v = (document.getElementById('v').value + "").trim();
             var request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                var DONE = this.DONE || 4;
-                if (this.readyState === DONE){
-                    var ytstate = JSON.parse(request.responseText);
-                    updatePage(ytstate);
-                }
-            };
-            request.open('GET', 'youtube?active=true&pause=false&v=' + encodeURIComponent(v) , true);
+            request.open('GET', 'youtubeupdate?active=true&pause=false&v=' + encodeURIComponent(v) , true);
             request.send();
         }
 
