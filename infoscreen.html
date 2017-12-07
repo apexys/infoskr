@@ -247,6 +247,14 @@
             }
         });
 
+        evtSource.addEventListener('youtube-volume', e=> {
+            var volume = parseInt(e.data);
+            if(playerActive){
+                player.setVolume(volume);
+                //console.log("setting volume to " + volume);
+            }
+        });
+
         function makeClearingYTRequest(){
             var request = new XMLHttpRequest();
             request.open('GET', 'http://localhost:8123/youtubeupdate?active=false&pause=false&v=_', true);

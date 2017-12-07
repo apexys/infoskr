@@ -47,7 +47,7 @@ let replayEvents = () => {
     setTimeout(() => {
         eventproxy.emit('event', {name: 'temperature', message: global_temperature});  
         eventproxy.emit('event', {name: 'pump', message: pump_status});   
-        getKVGdata();     
+        //getKVGdata();     
     }, 500);
 }
 
@@ -68,7 +68,8 @@ routes['/eventstream'] = (req,res) => {
 let ytcache = {
     v: "",
     active: "",
-    pause: ""
+    pause: "",
+    volume: "100"
 }
 
 routes['/youtubeupdate'] = (req,res) => {
@@ -88,6 +89,10 @@ routes['/youtubeupdate'] = (req,res) => {
         if(urlparts.query.pause){
             eventproxy.emit('event', {name: 'youtube-pause', message: urlparts.query.pause});
             ytcache.pause = urlparts.query.pause;
+        }
+        if(urlparts.query.volume){
+            eventproxy.emit('event', {name: 'youtube-volume', message: urlparts.query.volume});
+            ytcache.volume = urlparts.query.volume;
         }
     }
     res.writeHead('200', {'Content-Type': 'text/plain'});
@@ -131,7 +136,6 @@ let getKVGdata = () => {
         });
         response.on('end', function() {
             eventproxy.emit('event', {name: 'kvg', message: body});
-            console.log(body);
         });
     });
 };

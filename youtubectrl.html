@@ -20,6 +20,7 @@
     <body>
         <h1>Infoscreen Youtube Control</h1>
         <button id="btnStop" onclick="makeStopRequest();">stop</button><span class="spacer"></span><button id="btnPause" onclick="makePauseRequest();">pause</button><br/><br/>
+        Volume: <input id="rngVolume" type="range" min="0" max="100" step="1" value="100"><span id="waiting"></span><br/><br/>
         <input type="text" id="v"><button id="btnGo" onclick="makeVRequest();">go</button>
         <br/><br/>
         <h2>Status</h2>
@@ -31,12 +32,23 @@
         evtSource.addEventListener('youtube-v', e => document.getElementById('spvideoid').innerText = e.data);
         evtSource.addEventListener('youtube-active', e => document.getElementById('spactive').innerText = e.data);
         evtSource.addEventListener('youtube-pause', e => document.getElementById('sppaused').innerText = e.data);
+        evtSource.addEventListener('youtube-volume', e => {
+            document.getElementById('rngVolume').value = parseInt(e.data);
+            console.log("ytv");
+            if(volumeChangeRequestPending){
+                volumeRequest.abort();
+            }
+        });
+
 
         fetch('/ytcache').then(r => r.json()).then(ytcache => {
             document.getElementById('spvideoid').innerText = ytcache.v;
             document.getElementById('spactive').innerText = ytcache.active;
             document.getElementById('sppaused').innerText = ytcache.pause;
+            document.getElementById('rngVolume').value = parseInt(ytcache.volume);
         });
+
+        document.getElementById('rngVolume').addEventListener('change',volumeChanged);
 
         var pause = false;
 
@@ -45,6 +57,25 @@
             var request = new XMLHttpRequest();
             request.open('GET', 'youtubeupdate?active=false&pause=false', true);
             request.send();
+        }
+
+        let volumeChangeRequestPending = false;
+        let volumeRequest = null;
+        function volumeChanged(e){
+            if(!volumeChangeRequestPending){
+                volumeChangeRequestPending = true;
+                document.getElementById('waiting').innerText = "waiting";
+                var request = new XMLHttpRequest();
+                request.onreadystatechange = e => {
+                    if(request.readyState == 4){
+                        volumeChangeRequestPending = false;
+                        document.getElementById('waiting').innerText = "";
+                    }
+                }
+                request.open('GET', 'youtubeupdate?volume=' + e.target.value, true);
+                request.send();
+                volumeRequest = request;
+            }
         }
 
         function makePauseRequest(){
@@ -64,7 +95,7 @@
         function makeVRequest(){
             var v = (document.getElementById('v').value + "").trim();
             var request = new XMLHttpRequest();
-            request.open('GET', 'youtubeupdate?active=true&pause=false&v=' + encodeURIComponent(v) , true);
+            request.open('GET', 'youtubeupdate?active=true&pause=false&v=' + encodeURIComponent(v)  + "&volume=" +document.getElementById('rngVolume').value , true);
             request.send();
         }
 
